@@ -1024,7 +1024,7 @@ private:
     listenerIrDepth->release(frames);
     lockIrDepth.unlock();
 
-    //processIrDepth(depth, images, status);
+    processIrDepth(depth, images, status);
 
     publishImages(images, header, status, frame, pubFrameIrDepth, IR_SD, COLOR_HD);
 
@@ -1098,7 +1098,7 @@ private:
     listenerColor->release(frames);
     lockColor.unlock();
 
-    //processColor(images, status);
+    processColor(images, status);
 
     publishImages(images, header, status, frame, pubFrameColor, COLOR_HD, COUNT);
 
