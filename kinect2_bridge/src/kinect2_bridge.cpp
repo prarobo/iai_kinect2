@@ -289,7 +289,9 @@ private:
              << "edge_aware_filter: " FG_CYAN << (edge_aware_filter ? "true" : "false") << NO_COLOR << std::endl
              << "       publish_tf: " FG_CYAN << (publishTF ? "true" : "false") << NO_COLOR << std::endl
              << "     base_name_tf: " FG_CYAN << baseNameTF << NO_COLOR << std::endl
-             << "   worker_threads: " FG_CYAN << worker_threads << NO_COLOR);
+             << "   worker_threads: " FG_CYAN << worker_threads << NO_COLOR
+             << "   do_registration: " FG_CYAN << do_registration << NO_COLOR
+             << "   do_acquisition: " FG_CYAN << do_acquisition << NO_COLOR);
 
     deltaT = fps_limit > 0 ? 1.0 / fps_limit : 0.0;
 
