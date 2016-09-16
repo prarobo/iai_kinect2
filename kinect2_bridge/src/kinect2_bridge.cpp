@@ -123,7 +123,7 @@ private:
 
   enum Status
   {
-    UNSUBCRIBED = 0,
+    UNSUBSCRIBED = 0,
     RAW,
     COMPRESSED,
     BOTH
@@ -141,7 +141,7 @@ public:
       nextIrDepth(false), depthShift(0), running(false), deviceActive(false), clientConnected(false),
       do_registration(true), do_acquisition(true)
   {
-    status.resize(COUNT, UNSUBCRIBED);
+    status.resize(COUNT, UNSUBSCRIBED);
   }
 
   bool start()
@@ -826,7 +826,7 @@ private:
 
     for(size_t i = 0; i < COUNT; ++i)
     {
-      Status s = UNSUBCRIBED;
+      Status s = UNSUBSCRIBED;
       if(imagePubs[i].getNumSubscribers() > 0)
       {
         s = RAW;
@@ -836,11 +836,11 @@ private:
         s = s == RAW ? BOTH : COMPRESSED;
       }
 
-      if(i <= COLOR_SD_RECT && s != UNSUBCRIBED)
+      if(i <= COLOR_SD_RECT && s != UNSUBSCRIBED)
       {
         isSubscribedDepth = true;
       }
-      if(i >= COLOR_SD_RECT && s != UNSUBCRIBED)
+      if(i >= COLOR_SD_RECT && s != UNSUBSCRIBED)
       {
         isSubscribedColor = true;
       }
@@ -1024,7 +1024,7 @@ private:
     listenerIrDepth->release(frames);
     lockIrDepth.unlock();
 
-    processIrDepth(depth, images, status);
+    //processIrDepth(depth, images, status);
 
     publishImages(images, header, status, frame, pubFrameIrDepth, IR_SD, COLOR_HD);
 
@@ -1098,7 +1098,7 @@ private:
     listenerColor->release(frames);
     lockColor.unlock();
 
-    processColor(images, status);
+    //processColor(images, status);
 
     publishImages(images, header, status, frame, pubFrameColor, COLOR_HD, COUNT);
 
@@ -1292,7 +1292,7 @@ private:
 
       switch(status[i])
       {
-      case UNSUBCRIBED:
+      case UNSUBSCRIBED:
         break;
       case RAW:
         imageMsgs[i] = sensor_msgs::ImagePtr(new sensor_msgs::Image);
@@ -1320,7 +1320,7 @@ private:
     {
       switch(status[i])
       {
-      case UNSUBCRIBED:
+      case UNSUBSCRIBED:
         break;
       case RAW:
         imagePubs[i].publish(imageMsgs[i]);
