@@ -95,6 +95,7 @@ private:
   bool nextColor, nextIrDepth;
   double deltaT, depthShift, elapsedTimeColor, elapsedTimeIrDepth;
   bool running, deviceActive, clientConnected, isSubscribedColor, isSubscribedDepth;
+  bool do_registration, do_acquisition;
 
   enum Image
   {
@@ -137,7 +138,8 @@ public:
   Kinect2Bridge(const ros::NodeHandle &nh = ros::NodeHandle(), const ros::NodeHandle &priv_nh = ros::NodeHandle("~"))
     : sizeColor(1920, 1080), sizeIr(512, 424), sizeLowRes(sizeColor.width / 2, sizeColor.height / 2), color(sizeColor.width, sizeColor.height, 4), nh(nh), priv_nh(priv_nh),
       frameColor(0), frameIrDepth(0), pubFrameColor(0), pubFrameIrDepth(0), lastColor(0, 0), lastDepth(0, 0), nextColor(false),
-      nextIrDepth(false), depthShift(0), running(false), deviceActive(false), clientConnected(false)
+      nextIrDepth(false), depthShift(0), running(false), deviceActive(false), clientConnected(false),
+      do_registration(true), do_acquisition(true)
   {
     status.resize(COUNT, UNSUBCRIBED);
   }
@@ -262,7 +264,8 @@ private:
     priv_nh.param("edge_aware_filter", edge_aware_filter, true);
     priv_nh.param("publish_tf", publishTF, false);
     priv_nh.param("base_name_tf", baseNameTF, base_name);
-    priv_nh.param("worker_threads", worker_threads, 4);
+    priv_nh.param("do_registration", do_registration, true);
+    priv_nh.param("do_acquisition", do_acquisition, true);
 
     worker_threads = std::max(1, worker_threads);
     threads.resize(worker_threads);
@@ -856,7 +859,7 @@ private:
 
   void main()
   {
-    setThreadName("Controll");
+    setThreadName("Control");
     OUT_INFO("waiting for clients to connect");
     double nextFrame = ros::Time::now().toSec() + deltaT;
     double fpsTime = ros::Time::now().toSec();
