@@ -1025,7 +1025,7 @@ private:
     listenerIrDepth->release(frames);
     lockIrDepth.unlock();
 
-    processIrDepth(depth, images, status);
+    //processIrDepth(depth, images, status);
 
     publishImages(images, header, status, frame, pubFrameIrDepth, IR_SD, COLOR_HD);
 
@@ -1099,7 +1099,7 @@ private:
     listenerColor->release(frames);
     lockColor.unlock();
 
-    processColor(images, status);
+    //processColor(images, status);
 
     publishImages(images, header, status, frame, pubFrameColor, COLOR_HD, COUNT);
 
@@ -1282,6 +1282,7 @@ private:
 
     for(size_t i = begin; i < end; ++i)
     {
+      if(i==COLOR_HD) {
       if(i < DEPTH_HD || i == COLOR_SD_RECT)
       {
         _header.frame_id = baseNameTF + K2_TF_IR_OPT_FRAME;
@@ -1310,6 +1311,7 @@ private:
         createCompressed(images[i], _header, Image(i), *compressedMsgs[i]);
         break;
       }
+      }
     }
 
     while(frame != pubFrame)
@@ -1319,6 +1321,7 @@ private:
     lockPub.lock();
     for(size_t i = begin; i < end; ++i)
     {
+      if(i==COLOR_HD) {
       switch(status[i])
       {
       case UNSUBSCRIBED:
@@ -1333,6 +1336,7 @@ private:
         imagePubs[i].publish(imageMsgs[i]);
         compressedPubs[i].publish(compressedMsgs[i]);
         break;
+      }
       }
     }
 
