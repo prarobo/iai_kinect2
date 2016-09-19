@@ -25,6 +25,7 @@
 #include <mutex>
 #include <chrono>
 #include <sys/stat.h>
+#include <set>
 
 #if defined(__linux__)
 #include <sys/prctl.h>
@@ -129,6 +130,8 @@ private:
     BOTH
   };
 
+  std::set<int> rawTopics;
+
   std::vector<ros::Publisher> imagePubs, compressedPubs;
   ros::Publisher infoHDPub, infoQHDPub, infoIRPub;
   sensor_msgs::CameraInfo infoHD, infoQHD, infoIR;
@@ -142,6 +145,10 @@ public:
       do_registration(true), do_acquisition(true)
   {
     status.resize(COUNT, UNSUBSCRIBED);
+
+    rawTopics.insert(COLOR_HD);
+    rawTopics.insert(DEPTH_SD);
+    rawTopics.insert(IR_SD);
   }
 
   bool start()
@@ -157,6 +164,7 @@ public:
       return false;
     }
     running = true;
+    OUT_INFO("Initialize: done" << std::endl);
 
     if(publishTF)
     {
@@ -290,8 +298,8 @@ private:
              << "edge_aware_filter: " FG_CYAN << (edge_aware_filter ? "true" : "false") << NO_COLOR << std::endl
              << "       publish_tf: " FG_CYAN << (publishTF ? "true" : "false") << NO_COLOR << std::endl
              << "     base_name_tf: " FG_CYAN << baseNameTF << NO_COLOR << std::endl
-             << "   worker_threads: " FG_CYAN << worker_threads << NO_COLOR
-             << "   do_registration: " FG_CYAN << do_registration << NO_COLOR
+             << "   worker_threads: " FG_CYAN << worker_threads << NO_COLOR << std::endl
+             << "  do_registration: " FG_CYAN << do_registration << NO_COLOR << std::endl
              << "   do_acquisition: " FG_CYAN << do_acquisition << NO_COLOR);
 
     deltaT = fps_limit > 0 ? 1.0 / fps_limit : 0.0;
@@ -301,31 +309,46 @@ private:
       calib_path += '/';
     }
 
+    OUT_INFO("Compression init: start" << std::endl);
     initCompression(jpeg_quality, png_level, use_png);
+    OUT_INFO("Compression init: done" << std::endl);
 
+    OUT_INFO("Pipeline init: start" << std::endl);
     if(!initPipeline(depth_method, depth_dev))
     {
       return false;
     }
+    OUT_INFO("Pipeline init: done" << std::endl);
 
+    OUT_INFO("Device init: start" << std::endl);
     if(!initDevice(sensor))
     {
       return false;
     }
+    OUT_INFO("Device init: done" << std::endl);
 
+    OUT_INFO("Config init: start" << std::endl);
     initConfig(bilateral_filter, edge_aware_filter, minDepth, maxDepth);
+    OUT_INFO("Config init: done" << std::endl);
 
+    OUT_INFO("Calibration init: start" << std::endl);
     initCalibration(calib_path, sensor);
+    OUT_INFO("Calibration init: done" << std::endl);
 
-    if(!initRegistration(reg_method, reg_dev, maxDepth))
+    if(do_registration)
     {
-      if(!device->close())
+      OUT_INFO("Registration init: start" << std::endl);
+      if(!initRegistration(reg_method, reg_dev, maxDepth))
       {
-        OUT_ERROR("could not close device!");
+        if(!device->close())
+        {
+          OUT_ERROR("could not close device!");
+        }
+        delete listenerIrDepth;
+        delete listenerColor;
+        return false;
       }
-      delete listenerIrDepth;
-      delete listenerColor;
-      return false;
+      OUT_INFO("Registration init: done" << std::endl);
     }
 
     createCameraInfo();
@@ -494,13 +517,19 @@ private:
 
     imagePubs.resize(COUNT);
     compressedPubs.resize(COUNT);
+
     ros::SubscriberStatusCallback cb = boost::bind(&Kinect2Bridge::callbackStatus, this);
 
     for(size_t i = 0; i < COUNT; ++i)
     {
-      imagePubs[i] = nh.advertise<sensor_msgs::Image>(base_name + topics[i], queueSize, cb, cb);
-      compressedPubs[i] = nh.advertise<sensor_msgs::CompressedImage>(base_name + topics[i] + K2_TOPIC_COMPRESSED, queueSize, cb, cb);
+      if ((do_acquisition && rawTopics.count(i)==1) || (do_registration && rawTopics.count(i)==0))
+      {
+        imagePubs[i] = nh.advertise<sensor_msgs::Image>(base_name + topics[i], queueSize, cb, cb);
+        compressedPubs[i] = nh.advertise<sensor_msgs::CompressedImage>(base_name + topics[i] + K2_TOPIC_COMPRESSED,
+                                                                       queueSize, cb, cb);
+      }
     }
+
     infoHDPub = nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_HD + K2_TOPIC_INFO, queueSize, cb, cb);
     infoQHDPub = nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_QHD + K2_TOPIC_INFO, queueSize, cb, cb);
     infoIRPub = nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_SD + K2_TOPIC_INFO, queueSize, cb, cb);
@@ -729,7 +758,9 @@ private:
     createCameraInfo(sizeLowRes, cameraMatrixLowRes, distortionColor, cv::Mat::eye(3, 3, CV_64F), projLowRes, infoQHD);
   }
 
-  void createCameraInfo(const cv::Size &size, const cv::Mat &cameraMatrix, const cv::Mat &distortion, const cv::Mat &rotation, const cv::Mat &projection, sensor_msgs::CameraInfo &cameraInfo) const
+  void createCameraInfo(const cv::Size &size, const cv::Mat &cameraMatrix,
+                        const cv::Mat &distortion, const cv::Mat &rotation,
+                        const cv::Mat &projection, sensor_msgs::CameraInfo &cameraInfo) const
   {
     cameraInfo.height = size.height;
     cameraInfo.width = size.width;
@@ -828,22 +859,26 @@ private:
     for(size_t i = 0; i < COUNT; ++i)
     {
       Status s = UNSUBSCRIBED;
-      if(imagePubs[i].getNumSubscribers() > 0)
-      {
-        s = RAW;
-      }
-      if(compressedPubs[i].getNumSubscribers() > 0)
-      {
-        s = s == RAW ? BOTH : COMPRESSED;
-      }
 
-      if(i <= COLOR_SD_RECT && s != UNSUBSCRIBED)
+      if(rawTopics.count(i)==1)
       {
-        isSubscribedDepth = true;
-      }
-      if(i >= COLOR_SD_RECT && s != UNSUBSCRIBED)
-      {
-        isSubscribedColor = true;
+        if(imagePubs[i].getNumSubscribers() > 0)
+        {
+          s = RAW;
+        }
+        if(compressedPubs[i].getNumSubscribers() > 0)
+        {
+          s = s == RAW ? BOTH : COMPRESSED;
+        }
+
+        if(i <= COLOR_SD_RECT && s != UNSUBSCRIBED)
+        {
+          isSubscribedDepth = true;
+        }
+        if(i >= COLOR_SD_RECT && s != UNSUBSCRIBED)
+        {
+          isSubscribedColor = true;
+        }
       }
 
       status[i] = s;
@@ -1251,7 +1286,9 @@ private:
     }
   }
 
-  void publishImages(const std::vector<cv::Mat> &images, const std_msgs::Header &header, const std::vector<Status> &status, const size_t frame, size_t &pubFrame, const size_t begin, const size_t end)
+  void publishImages(const std::vector<cv::Mat> &images, const std_msgs::Header &header,
+                     const std::vector<Status> &status, const size_t frame, size_t &pubFrame,
+                     const size_t begin, const size_t end)
   {
     std::vector<sensor_msgs::ImagePtr> imageMsgs(COUNT);
     std::vector<sensor_msgs::CompressedImagePtr> compressedMsgs(COUNT);
